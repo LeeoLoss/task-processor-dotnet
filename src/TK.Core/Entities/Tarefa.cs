@@ -2,7 +2,7 @@ using TK.Core.Enums;
 
 namespace TK.Core.Entities;
 
-public class Job
+public class Tarefa
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Tipo { get; set; } = string.Empty;
