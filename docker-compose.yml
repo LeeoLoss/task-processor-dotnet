@@ -1,0 +1,27 @@
+services:
+  # Banco NoSQL onde as tarefas ficam salvas
+  mongodb:
+    image: mongo:7
+    container_name: tk-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  # Fila de mensagens. A imagem "management" inclui um painel web
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: tk-rabbitmq
+    ports:
+      - "5672:5672"     # porta usada pela aplicação
+      - "15672:15672"   # painel web: http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+# Os volumes guardam os dados mesmo se os containers forem recriados
+volumes:
+  mongodb_data:
+  rabbitmq_data:
