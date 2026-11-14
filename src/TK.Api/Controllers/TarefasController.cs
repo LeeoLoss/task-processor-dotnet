@@ -9,14 +9,16 @@ namespace TK.Api.Controllers;
 [Route("tarefas")]
 public class TarefasController : ControllerBase
 {
-    private readonly ITarefaRepositorio _repositorio; 
-    
-    public TarefasController(ITarefaRepositorio repositorio)
+    private readonly ITarefaRepositorio _repositorio;
+    private readonly IPublicadorTarefa _publicador;
+
+    public TarefasController(ITarefaRepositorio repositorio, IPublicadorTarefa publicador)
     {
         _repositorio = repositorio;
+        _publicador = publicador;
     }
 
-    // POST /tarefas: Criar uma nova tarefa com status "Pendente" e armazená-la no banco de dados
+    // POST /tarefas: Criar uma nova tarefa com status "Pendente", armazená-la no banco de dados e enviá-la para a fila
     [HttpPost]
     public async Task<IActionResult> CriarTarefa([FromBody] CriarTarefaRequisicao requisicao)
     {
@@ -28,11 +30,15 @@ public class TarefasController : ControllerBase
 
         await _repositorio.CriarAsync(tarefa);
 
+        // Avisa a fila de que existe uma tarefa nova para o Worker processar.
+        // Vem depois de salvar, para a tarefa já existir no banco quando o Worker receber o Id
+        await _publicador.PublicarAsync(tarefa.Id);
+
         // Retorna 202 Accepted com a localização da nova tarefa criada
         return AcceptedAtAction(nameof(ObterPorId), new { id = tarefa.Id }, TarefaResposta.De(tarefa));
     }
 
-    // GET /tarefas/{id}: Obter uma tarefa pelo seu ID
+    // GET: Obter uma tarefa pelo seu ID
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> ObterPorId(Guid id)
     {
