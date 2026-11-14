@@ -8,5 +8,5 @@ public class Tarefa
     public string Tipo { get; set; } = string.Empty;
     public string Dados { get; set; } = "{}";
     public StatusTarefa Status { get; set; } = StatusTarefa.Pendente;
-    public DateTime CriadaEm { get; set; }
+    public DateTime CriadaEm { get; set; } = DateTime.UtcNow;
 }
