@@ -1,5 +1,5 @@
 using TK.Core.Entities;
-
+using TK.Core.Enums;
 namespace TK.Core.Interfaces;
 
 // Contrato de acesso às tarefas no banco.
@@ -11,4 +11,7 @@ public interface ITarefaRepositorio
 
     // Buscar tarefa via Id. Caso não exista, retorna null
     Task<Tarefa?> ObterPorIdAsync(Guid id);
+
+    // Atualizar o status de uma tarefa 
+    Task AtualizarStatusAsync(Guid id, StatusTarefa status);
 }
