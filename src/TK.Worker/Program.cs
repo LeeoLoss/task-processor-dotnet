@@ -1,12 +1,13 @@
 using MongoDB.Driver;
 using TK.Core.Interfaces;
+using TK.Core.Messaging;
 using TK.Core.Repositories;
 using TK.Core.Settings;
 using TK.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Define como o MongoDB grava Guid e enums (precisa rodar antes de qualquer uso do banco)
+// Definição de como o MongoDB grava o Guid e Enums
 MapeamentoMongo.Registrar();
 
 // Leitura da configuração "Mongo" do appsettings.json
@@ -23,6 +24,13 @@ var configuracaoRabbitMq = builder.Configuration.GetSection("RabbitMq").Get<Conf
                            ?? new ConfiguracaoRabbitMq();
 
 builder.Services.AddSingleton(configuracaoRabbitMq);
+builder.Services.AddSingleton<IPublicadorTarefa, PublicadorTarefa>();
+
+// Regras de re-tentativa
+var configuracaoProcessamento = builder.Configuration.GetSection("Processamento").Get<ConfiguracaoProcessamento>()
+                                ?? new ConfiguracaoProcessamento();
+
+builder.Services.AddSingleton(configuracaoProcessamento);
 
 // Worker
 builder.Services.AddHostedService<Worker>();
