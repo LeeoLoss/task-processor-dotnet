@@ -7,6 +7,11 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Fila de mensagens. A imagem "management" inclui um painel web
   rabbitmq:
@@ -20,6 +25,46 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # API que recebe e consulta as tarefas
+  api:
+    build:
+      context: .
+      target: api
+    container_name: tk-api
+    ports:
+      - "5099:8080"
+    environment:
+      # Em desenvolvimento o Swagger fica ativo
+      ASPNETCORE_ENVIRONMENT: Development
+      # Dentro do Docker, os serviços se encontram pelo nome, e não por localhost
+      Mongo__StringConexao: mongodb://mongodb:27017
+      RabbitMq__Host: rabbitmq
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # Worker que processa as tarefas da fila. Sem container_name, para poder rodar várias cópias
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      Mongo__StringConexao: mongodb://mongodb:27017
+      RabbitMq__Host: rabbitmq
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
 
 # Os volumes guardam os dados mesmo se os containers forem recriados
 volumes:
