@@ -9,4 +9,6 @@ public class Tarefa
     public string Dados { get; set; } = "{}";
     public StatusTarefa Status { get; set; } = StatusTarefa.Pendente;
     public DateTime CriadaEm { get; set; } = DateTime.UtcNow;
+    public int Tentativas { get; set; }
+    public string? MensagemErro { get; set; }
 }

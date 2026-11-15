@@ -13,5 +13,9 @@ public interface ITarefaRepositorio
     Task<Tarefa?> ObterPorIdAsync(Guid id);
 
     // Atualizar o status de uma tarefa 
-    Task AtualizarStatusAsync(Guid id, StatusTarefa status);
-}
+    Task AtualizarStatusAsync(Guid id, StatusTarefa status, string? mensagemErro = null);
+
+    // Tenta reservar uma tarefa para processamento, mudando seu status para EmProcessamento
+    // Retorna a tarefa já atualizada, ou null se não conseguiu reservar
+    Task<Tarefa?> ReservarParaProcessamentoAsync(Guid id, bool mensagemReentregue);
+}   
