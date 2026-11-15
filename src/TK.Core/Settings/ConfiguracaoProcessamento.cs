@@ -8,4 +8,7 @@ public class ConfiguracaoProcessamento
     
     // Segundos entre tentativas de reprocessamento
     public int SegundosEntreTentativas { get; set; } = 5;
+    
+    // Segundos para processamento de uma tarefa
+    public int SegundosProcessamento { get; set; } = 5;
 }
