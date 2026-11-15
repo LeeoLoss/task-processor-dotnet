@@ -1,0 +1,8 @@
+language: "pt-BR"
+reviews:
+  profile: "chill"
+  auto_review:
+    enabled: true
+    base_branches:
+      - "dev"
+      - "main"

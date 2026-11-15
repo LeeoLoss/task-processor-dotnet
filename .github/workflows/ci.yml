@@ -1,0 +1,31 @@
+name: CI
+
+# Quando o pipeline roda: em todo push para dev e main, e em todo Pull Request para elas
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  build-e-testes:
+    # Máquina virtual Linux fornecida pelo GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixa o código
+        uses: actions/checkout@v4
+
+      - name: Instala o .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restaura os pacotes
+        run: dotnet restore
+
+      - name: Compila
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Roda os testes
+        run: dotnet test --no-build --configuration Release --verbosity normal

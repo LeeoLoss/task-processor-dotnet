@@ -33,6 +33,7 @@ var configuracaoProcessamento = builder.Configuration.GetSection("Processamento"
 builder.Services.AddSingleton(configuracaoProcessamento);
 
 // Worker
+builder.Services.AddSingleton<ProcessadorTarefa>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
