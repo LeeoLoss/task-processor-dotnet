@@ -9,5 +9,5 @@ public class ConfiguracaoRabbitMq
     public string Senha { get; set; } = "guest";
 
     // Nome da fila para envio de tarefas
-    public string NomeFilaTarefas { get; set; } = "fila_tarefas";
+    public string NomeFilaTarefas { get; set; } = "fila-tarefas";
 }
