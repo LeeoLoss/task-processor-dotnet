@@ -1,5 +1,7 @@
 # Task Processor
 
+![CI](https://github.com/LeeoLoss/task-processor-dotnet/actions/workflows/ci.yml/badge.svg)
+
 Serviço de processamento de tarefas em segundo plano, feito em C# (.NET 8), desenvolvido como desafio técnico para a vaga de Desenvolvedor Jr C# / ASP.NET.
 
 A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou mais Workers consomem a fila, processam as tarefas em segundo plano e mantêm o status atualizado, com re-tentativa em caso de falha e controle de concorrência entre os Workers.
@@ -47,13 +49,14 @@ O cliente consulta o status a qualquer momento com `GET /tarefas/{id}`.
 - MongoDB 7 (banco NoSQL)
 - RabbitMQ 3 (fila de mensagens)
 - Docker e Docker Compose
+- xUnit (testes) e GitHub Actions (integração contínua)
 
 ## Estrutura do projeto
 
 ```
 src/
 ├── TK.Api/       API REST (controllers e DTOs)
-├── TK.Worker/    Worker que consome a fila e processa as tarefas
+├── TK.Worker/    Worker que consome a fila e ProcessadorTarefa (regras de processamento)
 └── TK.Core/      Código compartilhado entre os dois
     ├── Entities/       Entidade Tarefa
     ├── Enums/          StatusTarefa
@@ -61,6 +64,8 @@ src/
     ├── Messaging/      Publicador do RabbitMQ
     ├── Repositories/   Acesso ao MongoDB
     └── Settings/       Classes de configuração
+tests/
+└── TK.Tests/     Testes unitários (xUnit)
 ```
 
 `TK` é a abreviação de *Task*. A API e o Worker dependem do `TK.Core`, mas não dependem um do outro.
@@ -169,6 +174,19 @@ O trabalho do Worker é simulado (5 segundos por tarefa). O campo `falharAte` do
 
 Para testar a **concorrência**, rode dois ou mais Workers (`--scale worker=2`), crie várias tarefas seguidas e acompanhe `docker compose logs -f worker`: cada tarefa é processada uma única vez, dividida entre os Workers.
 
+## Testes
+
+```bash
+dotnet test
+```
+
+Os testes são unitários e rodam sem MongoDB nem RabbitMQ, usando dublês em memória (`tests/TK.Tests/Fakes`). Cobrem:
+
+- **`ProcessadorTarefa`:** conclusão, re-tentativa, status `Erro` ao esgotar as tentativas, tarefas já processadas, retomada de tarefa presa após reentrega e disputa entre vários Workers pela mesma tarefa.
+- **`TarefasController`:** criação (que salva como `Pendente` e publica na fila) e consulta (`200` e `404`).
+
+O pipeline do GitHub Actions (`.github/workflows/ci.yml`) compila o projeto e roda os testes a cada push e Pull Request para `dev` e `main`.
+
 ## Configuração
 
 As configurações ficam nos `appsettings.json` de cada projeto e podem ser sobrescritas por variáveis de ambiente, usando `__` para separar os níveis (é o que o `docker-compose.yml` faz para apontar para os serviços `mongodb` e `rabbitmq`).
@@ -177,7 +195,7 @@ As configurações ficam nos `appsettings.json` de cada projeto e podem ser sobr
 |---|---|---|
 | `Mongo` | `StringConexao`, `NomeBanco`, `NomeColecaoTarefas` | `mongodb://localhost:27017`, `task-processor`, `tarefas` |
 | `RabbitMq` | `Host`, `Porta`, `Usuario`, `Senha`, `NomeFilaTarefas` | `localhost`, `5672`, `guest`, `guest`, `fila-tarefas` |
-| `Processamento` | `MaximoTentativas`, `SegundosEntreTentativas` | `3`, `5` |
+| `Processamento` | `MaximoTentativas`, `SegundosEntreTentativas`, `SegundosProcessamento` | `3`, `5`, `5` |
 
 Exemplo: `RabbitMq__Host=rabbitmq` equivale a `"RabbitMq": { "Host": "rabbitmq" }`.
 
@@ -189,7 +207,9 @@ Exemplo: `RabbitMq__Host=rabbitmq` equivale a `"RabbitMq": { "Host": "rabbitmq" 
 - **Um Worker por vez, por mensagem.** Cada Worker usa `prefetch = 1`: só recebe a próxima mensagem depois de concluir a atual, o que distribui bem o trabalho entre vários Workers.
 - **Re-tentativa com limite.** Ao falhar, a tarefa volta a `Pendente`, espera alguns segundos e é recolocada na fila, até o limite de `MaximoTentativas`. Depois disso, fica com `Erro` e a mensagem de erro é guardada.
 - **Fila e mensagens duráveis.** Elas sobrevivem a uma reinicialização do RabbitMQ.
+- **Regras separadas da infraestrutura.** O `ProcessadorTarefa` decide o que fazer com cada tarefa e não conhece o RabbitMQ, o que permite testá-lo com dublês em memória. O `Worker` só cuida de receber e confirmar as mensagens.
 - **Interfaces no `TK.Core`.** A API e o Worker dependem de contratos (`ITarefaRepositorio`, `IPublicadorTarefa`), e não do MongoDB ou do RabbitMQ diretamente.
+- **Cliente oficial do RabbitMQ, sem framework.** Usei o `RabbitMQ.Client` para deixar explícito o controle de confirmação (ack), a re-tentativa e a concorrência. Em um projeto de produção, o MassTransit seria uma alternativa, com re-tentativa, *outbox* e outros recursos prontos (a versão 9 tem licença comercial, vale conferir antes de adotar).
 
 ## Limitações conhecidas
 
@@ -197,4 +217,3 @@ Exemplo: `RabbitMq__Host=rabbitmq` equivale a `"RabbitMq": { "Host": "rabbitmq" 
 - A espera entre tentativas é feita dentro do Worker, que fica ocupado durante esse tempo. Uma alternativa seria usar filas de espera com TTL no RabbitMQ.
 - As credenciais (`guest`/`guest`) são só para desenvolvimento. Em produção, devem vir de variáveis de ambiente ou de um gerenciador de segredos.
 - A API não tem autenticação.
-- Ainda não há testes automatizados nem pipeline de CI.
