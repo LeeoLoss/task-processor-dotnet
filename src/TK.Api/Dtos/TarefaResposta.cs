@@ -11,6 +11,8 @@ public record TarefaResposta
     string Tipo,
     JsonElement Dados,
     StatusTarefa Status,
+    int Tentativas,
+    string? MensagemErro,
     DateTime CriadaEm
     )
 {
@@ -23,8 +25,10 @@ public record TarefaResposta
         (
             tarefa.Id,
             tarefa.Tipo,
-            JsonSerializer.Deserialize<JsonElement>(tarefa.Dados),
+            documento.RootElement.Clone(),            
             tarefa.Status,
+            tarefa.Tentativas,
+            tarefa.MensagemErro,
             tarefa.CriadaEm
         );
     }

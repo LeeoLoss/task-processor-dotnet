@@ -1,6 +1,8 @@
 using System.Text;
+using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using TK.Core.Entities;
 using TK.Core.Enums;
 using TK.Core.Interfaces;
 using TK.Core.Settings;
@@ -11,19 +13,27 @@ namespace TK.Worker;
 public class Worker : BackgroundService
 {
     private readonly ConfiguracaoRabbitMq _configuracao;
+    private readonly ConfiguracaoProcessamento _processamento;
     private readonly ITarefaRepositorio _repositorio;
+    private readonly IPublicadorTarefa _publicador;
     private readonly ILogger<Worker> _logger;
 
+    // Injeta as configurações via construtor
     public Worker(
         ConfiguracaoRabbitMq configuracao,
+        ConfiguracaoProcessamento processamento,
         ITarefaRepositorio repositorio,
+        IPublicadorTarefa publicador,
         ILogger<Worker> logger)
     {
         _configuracao = configuracao;
+        _processamento = processamento;
         _repositorio = repositorio;
+        _publicador = publicador;
         _logger = logger;
     }
 
+    // Executado quando o Worker iniciar
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var fabrica = new ConnectionFactory
@@ -34,6 +44,7 @@ public class Worker : BackgroundService
             Password = _configuracao.Senha
         };
 
+        // Cria uma nova conexão e canal
         await using var conexao = await fabrica.CreateConnectionAsync(stoppingToken);
         await using var canal = await conexao.CreateChannelAsync(cancellationToken: stoppingToken);
 
@@ -60,11 +71,12 @@ public class Worker : BackgroundService
             consumer: consumidor,
             cancellationToken: stoppingToken);
 
+        // Aguarda tarefas na fila
         _logger.LogInformation("Worker aguardando tarefas na fila '{Fila}'...", _configuracao.NomeFilaTarefas);
 
+        // Worker fica ativo até o encerramento da aplicação
         try
         {
-            // Worker fica ativo até o encerramento da aplicação
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
         catch (OperationCanceledException)
@@ -75,7 +87,7 @@ public class Worker : BackgroundService
 
     private async Task ProcessarMensagemAsync(IChannel canal, BasicDeliverEventArgs evento, CancellationToken ct)
     {
-        // A mensagem é só o Id da tarefa, escrito como texto
+        // A mensagem é só o Id da tarefa, escrito como string
         var texto = Encoding.UTF8.GetString(evento.Body.ToArray());
 
         if (!Guid.TryParse(texto, out var tarefaId))
@@ -86,44 +98,108 @@ public class Worker : BackgroundService
             await canal.BasicAckAsync(evento.DeliveryTag, multiple: false);
             return;
         }
+        
+Tarefa? tarefa = null;
 
         try
         {
-            var tarefa = await _repositorio.ObterPorIdAsync(tarefaId);
+            // Reserva atômica: se outro Worker já pegou a tarefa, volta null
+            tarefa = await _repositorio.ReservarParaProcessamentoAsync(tarefaId, evento.Redelivered);
 
             if (tarefa is null)
             {
-                // Tarefa não encontrada no banco
-                _logger.LogWarning("Tarefa {TarefaId} não encontrada no banco. Mensagem descartada.", tarefaId);
+                _logger.LogInformation(
+                    "Tarefa {TarefaId} não pôde ser reservada (já processada, em andamento em outro Worker ou inexistente). Ignorando.",
+                    tarefaId);
                 await canal.BasicAckAsync(evento.DeliveryTag, multiple: false);
                 return;
             }
 
-            await _repositorio.AtualizarStatusAsync(tarefaId, StatusTarefa.EmProcessamento);
-            _logger.LogInformation("Processando tarefa {TarefaId} do tipo '{Tipo}'...", tarefaId, tarefa.Tipo);
+            _logger.LogInformation(
+                "Processando tarefa {TarefaId} do tipo '{Tipo}' (tentativa {Tentativa}/{Maximo})...",
+                tarefa.Id, tarefa.Tipo, tarefa.Tentativas, _processamento.MaximoTentativas);
 
-            // Aqui entraria o trabalho de verdade (enviar e-mail, gerar relatório...).
-            // O desafio não exige isso, então apenas simulamos uma demora
-            await Task.Delay(TimeSpan.FromSeconds(5), ct);
+            await ExecutarTarefaAsync(tarefa, ct);
 
-            await _repositorio.AtualizarStatusAsync(tarefaId, StatusTarefa.Concluido);
-            _logger.LogInformation("Tarefa {TarefaId} concluída.", tarefaId);
+            await _repositorio.AtualizarStatusAsync(tarefa.Id, StatusTarefa.Concluido);
+            _logger.LogInformation("Tarefa {TarefaId} concluída.", tarefa.Id);
 
             // Confirma a mensagem: agora o RabbitMQ pode removê-la da fila
             await canal.BasicAckAsync(evento.DeliveryTag, multiple: false);
         }
         catch (OperationCanceledException)
         {
-            // Worker devolve a mensagem para a fila
+            // O Worker está sendo desligado: devolve a mensagem para a fila
             await canal.BasicNackAsync(evento.DeliveryTag, multiple: false, requeue: true);
         }
         catch (Exception ex)
         {
-            // Qualquer falha no processamento da tarefa é registrada 
-            // e a mensagem é confirmada para não ficar em loop na fila
-            _logger.LogError(ex, "Falha ao processar a tarefa {TarefaId}.", tarefaId);
-            await _repositorio.AtualizarStatusAsync(tarefaId, StatusTarefa.Erro);
-            await canal.BasicAckAsync(evento.DeliveryTag, multiple: false);
+            if (tarefa is null)
+            {
+                // Falhou antes de reservar (por exemplo, o MongoDB fora do ar): devolve a mensagem para a fila
+                _logger.LogError(ex, "Erro ao reservar a tarefa {TarefaId}. A mensagem voltará para a fila.", tarefaId);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                await canal.BasicNackAsync(evento.DeliveryTag, multiple: false, requeue: true);
+                return;
+            }
+
+            try
+            {
+                await TratarFalhaAsync(tarefa, ex, ct);
+                await canal.BasicAckAsync(evento.DeliveryTag, multiple: false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Desligamento durante a espera da re-tentativa: a mensagem volta para a fila
+                await canal.BasicNackAsync(evento.DeliveryTag, multiple: false, requeue: true);
+            }
+        }
+    }
+
+    // Decide o que fazer quando o processamento falha: tentar de novo ou desistir
+    private async Task TratarFalhaAsync(Tarefa tarefa, Exception ex, CancellationToken ct)
+    {
+        if (tarefa.Tentativas < _processamento.MaximoTentativas)
+        {
+            _logger.LogWarning(
+                "Falha na tentativa {Tentativa}/{Maximo} da tarefa {TarefaId}: {Erro}. Nova tentativa em {Segundos}s.",
+                tarefa.Tentativas, _processamento.MaximoTentativas, tarefa.Id, ex.Message,
+                _processamento.SegundosEntreTentativas);
+
+            // Volta para Pendente, guardando o erro, para a tarefa poder ser reservada de novo
+            await _repositorio.AtualizarStatusAsync(tarefa.Id, StatusTarefa.Pendente, ex.Message);
+
+            // Espera um pouco antes de recolocar na fila, para não insistir imediatamente
+            await Task.Delay(TimeSpan.FromSeconds(_processamento.SegundosEntreTentativas), ct);
+
+            await _publicador.PublicarAsync(tarefa.Id);
+            return;
+        }
+
+        _logger.LogError(
+            "Tarefa {TarefaId} falhou após {Tentativas} tentativa(s) e foi marcada com Erro: {Erro}",
+            tarefa.Id, tarefa.Tentativas, ex.Message);
+
+        await _repositorio.AtualizarStatusAsync(tarefa.Id, StatusTarefa.Erro, ex.Message);
+    }
+
+    // Aqui entraria o trabalho de verdade (enviar e-mail, gerar relatório...).
+    // O desafio não exige isso, então apenas simulamos uma demora
+    private static async Task ExecutarTarefaAsync(Tarefa tarefa, CancellationToken ct)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+
+        // Para testar a re-tentativa:
+        // a tarefa falha enquanto o número da tentativa for menor que 3
+        using var documento = JsonDocument.Parse(tarefa.Dados);
+
+        // Se o JSON tiver a propriedade "falharAte" com um número, falha até atingir esse número de tentativas
+        if (documento.RootElement.ValueKind == JsonValueKind.Object
+            && documento.RootElement.TryGetProperty("falharAte", out var valor)
+            && valor.TryGetInt32(out var falharAte)
+            && tarefa.Tentativas < falharAte)
+        {
+            throw new InvalidOperationException($"Falha simulada na tentativa {tarefa.Tentativas}.");
         }
     }
 }
