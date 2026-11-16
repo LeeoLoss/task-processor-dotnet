@@ -11,7 +11,7 @@ A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou
 ## Como funciona
 
 ```
-                 1. POST /tarefas
+1. POST /tarefas
    Cliente ───────────────────────────► API (TK.Api)
                                           │  2. salva (Pendente)
                                           ▼
@@ -62,6 +62,8 @@ O cliente consulta o status a qualquer momento com `GET /tarefas/{id}`.
 ├── .github/workflows/      Pipeline de CI (GitHub Actions)
 ├── .gitattributes          Padroniza o fim de linha entre Windows, macOS e Linux
 ├── .coderabbit.yaml        Configuração da revisão automática (CodeRabbit)
+├── docs/
+│   └── roteiro-testes.md   Roteiro completo de testes manuais (Swagger e RabbitMQ)
 ├── src/
 │   ├── TK.Api/       API REST (controllers e DTOs)
 │   ├── TK.Worker/    Worker que consome a fila e ProcessadorTarefa (regras de processamento)
@@ -217,6 +219,8 @@ O trabalho do Worker é simulado (5 segundos por tarefa). O campo `falharAte` do
 | `{"falharAte": 99}` | Falha em todas e termina em `Erro` após 3 tentativas |
 
 Para testar a **concorrência**, rode dois ou mais Workers (`--scale worker=2`), crie várias tarefas seguidas e acompanhe `docker compose logs -f worker`: cada tarefa é processada uma única vez, dividida entre os Workers.
+
+> 📋 **Roteiro completo de testes manuais:** Para validar todos os cenários passo a passo (validações de entrada, re-tentativas, concorrência entre Workers, queda de containers e resiliência), acesse o [**Roteiro de Testes (Swagger e Painel do RabbitMQ)**](docs/roteiro-testes.md).
 
 ## Testes
 
