@@ -94,7 +94,7 @@ docker compose ps
 |---|---|
 | API (Swagger) | http://localhost:5099/swagger |
 | Painel do RabbitMQ | http://localhost:15672 (usuário `guest`, senha `guest`) |
-| MongoDB | `localhost:27017` |
+| MongoDB | http://localhost:27017 |
 
 Para rodar **vários Workers** ao mesmo tempo:
 
