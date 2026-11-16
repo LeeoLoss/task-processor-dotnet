@@ -43,6 +43,8 @@ O cliente consulta o status a qualquer momento com `GET /tarefas/{id}`.
 | `Concluido` | Processada com sucesso |
 | `Erro` | Falhou em todas as tentativas permitidas |
 
+> A `mensagemErro` guarda o erro da última tentativa que falhou. Se uma tarefa falha e depois conclui numa nova tentativa, o status vira `Concluido` e a mensagem permanece como histórico do que aconteceu.
+
 ## Tecnologias
 
 - C# e .NET 8 (ASP.NET Core e Worker Service)
@@ -54,18 +56,23 @@ O cliente consulta o status a qualquer momento com `GET /tarefas/{id}`.
 ## Estrutura do projeto
 
 ```
-src/
-├── TK.Api/       API REST (controllers e DTOs)
-├── TK.Worker/    Worker que consome a fila e ProcessadorTarefa (regras de processamento)
-└── TK.Core/      Código compartilhado entre os dois
-    ├── Entities/       Entidade Tarefa
-    ├── Enums/          StatusTarefa
-    ├── Interfaces/     Contratos (repositório e publicador)
-    ├── Messaging/      Publicador do RabbitMQ
-    ├── Repositories/   Acesso ao MongoDB
-    └── Settings/       Classes de configuração
-tests/
-└── TK.Tests/     Testes unitários (xUnit)
+.
+├── Dockerfile              Imagens da API e do Worker (stages "api" e "worker")
+├── docker-compose.yml      Sobe MongoDB, RabbitMQ, API e Worker
+├── .github/workflows/      Pipeline de CI (GitHub Actions)
+├── .coderabbit.yaml        Configuração da revisão automática (CodeRabbit)
+├── src/
+│   ├── TK.Api/       API REST (controllers e DTOs)
+│   ├── TK.Worker/    Worker que consome a fila e ProcessadorTarefa (regras de processamento)
+│   └── TK.Core/      Código compartilhado entre os dois
+│       ├── Entities/       Entidade Tarefa
+│       ├── Enums/          StatusTarefa
+│       ├── Interfaces/     Contratos (repositório e publicador)
+│       ├── Messaging/      Publicador do RabbitMQ
+│       ├── Repositories/   Acesso ao MongoDB
+│       └── Settings/       Classes de configuração
+└── tests/
+    └── TK.Tests/     Testes unitários (xUnit)
 ```
 
 `TK` é a abreviação de *Task*. A API e o Worker dependem do `TK.Core`, mas não dependem um do outro.
@@ -109,6 +116,31 @@ docker compose logs -f worker
 docker compose down        # mantém os dados
 docker compose down -v     # apaga também os dados
 ```
+
+### Só com o Dockerfile (sem Compose)
+
+O `Dockerfile` tem dois alvos (`--target`), um para cada parte do serviço:
+
+```bash
+docker build --target api -t tk-api .
+docker build --target worker -t tk-worker .
+```
+
+Como a API e o Worker precisam do MongoDB e do RabbitMQ, suba esses dois antes (por exemplo, com `docker compose up -d mongodb rabbitmq`) e passe os endereços por variáveis de ambiente:
+
+```bash
+docker run -d --network host -p 5099:8080 \
+  -e Mongo__StringConexao=mongodb://localhost:27017 \
+  -e RabbitMq__Host=localhost \
+  tk-api
+
+docker run -d --network host \
+  -e Mongo__StringConexao=mongodb://localhost:27017 \
+  -e RabbitMq__Host=localhost \
+  tk-worker
+```
+
+> `--network host` funciona em Linux. No Docker Desktop (Windows/macOS), use `host.docker.internal` no lugar de `localhost` e remova essa opção. Se estiver em dúvida, o caminho com `docker compose` acima é o mais simples.
 
 ### Localmente, sem Docker para a aplicação
 
