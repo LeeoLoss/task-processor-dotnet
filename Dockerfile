@@ -21,7 +21,6 @@ RUN dotnet publish src/TK.Worker/TK.Worker.csproj -c Release -o /app/worker --no
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS api
 WORKDIR /app
 COPY --from=build /app/api .
-ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "TK.Api.dll"]
 

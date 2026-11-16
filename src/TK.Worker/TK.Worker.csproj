@@ -4,7 +4,6 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>dotnet-TK.Worker-5fa3560c-edd4-4b21-ae27-11948698804b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
