@@ -4,7 +4,7 @@
 
 Serviço de processamento de tarefas em segundo plano, feito em C# (.NET 8), desenvolvido como desafio técnico para a vaga de Desenvolvedor Jr C# / ASP.NET.
 
-A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou mais Workers consomem a fila, processam as tarefas em segundo plano e mantêm o status atualizado, com re-tentativa em caso de falha e controle de concorrência entre os Workers.
+A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou mais Workers consomem a fila, processam as tarefas em segundo plano e mantêm o status atualizado, com re-tentativa (com o limite de 3) em caso de falha e controle de concorrência entre os Workers.
 
 > O processamento em si (enviar e-mail, gerar relatório...) é simulado, como permite o enunciado. O foco está na estrutura que sustenta essas operações.
 
