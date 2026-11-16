@@ -9,8 +9,14 @@ on:
 
 jobs:
   build-e-testes:
-    # Máquina virtual Linux fornecida pelo GitHub
-    runs-on: ubuntu-latest
+    # Roda o mesmo pipeline em Linux, Windows e macOS
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    # Máquina virtual fornecida pelo GitHub, de acordo com o sistema da matriz
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Baixa o código
