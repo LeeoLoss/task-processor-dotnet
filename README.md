@@ -11,7 +11,7 @@ A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou
 ## Como funciona
 
 ```
-1. POST /tarefas
+                 1. POST /tarefas
    Cliente ───────────────────────────► API (TK.Api)
                                           │  2. salva (Pendente)
                                           ▼
@@ -108,7 +108,7 @@ docker compose ps
 | API (Swagger) | http://localhost:5099/swagger |
 | Verificação da API | http://localhost:5099/health |
 | Painel do RabbitMQ | http://localhost:15672 (usuário `guest`, senha `guest`) |
-| MongoDB | http://localhost:27017 |
+| MongoDB | `localhost:27017` |
 
 O endereço `/health` responde `{"status":"ok"}` quando a API está no ar.
 
