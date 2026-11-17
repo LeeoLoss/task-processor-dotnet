@@ -106,8 +106,11 @@ docker compose ps
 | Serviço | Endereço |
 |---|---|
 | API (Swagger) | http://localhost:5099/swagger |
+| Verificação da API | http://localhost:5099/health |
 | Painel do RabbitMQ | http://localhost:15672 (usuário `guest`, senha `guest`) |
 | MongoDB | http://localhost:27017 |
+
+O endereço `/health` responde `{"status":"ok"}` quando a API está no ar.
 
 Para rodar **vários Workers** ao mesmo tempo:
 
