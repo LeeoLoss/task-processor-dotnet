@@ -4,7 +4,7 @@
 
 Serviço de processamento de tarefas em segundo plano, feito em C# (.NET 8), desenvolvido como desafio técnico para a vaga de Desenvolvedor Jr C# / ASP.NET.
 
-A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou mais Workers consomem a fila, processam as tarefas em segundo plano e mantêm o status atualizado, com re-tentativa em caso de falha e controle de concorrência entre os Workers.
+A API recebe tarefas, guarda no MongoDB e as coloca numa fila do RabbitMQ. Um ou mais Workers consomem a fila, processam as tarefas em segundo plano e mantêm o status atualizado, com re-tentativa (com o limite de 3) em caso de falha e controle de concorrência entre os Workers.
 
 > O processamento em si (enviar e-mail, gerar relatório...) é simulado, como permite o enunciado. O foco está na estrutura que sustenta essas operações.
 
@@ -62,6 +62,8 @@ O cliente consulta o status a qualquer momento com `GET /tarefas/{id}`.
 ├── .github/workflows/      Pipeline de CI (GitHub Actions)
 ├── .gitattributes          Padroniza o fim de linha entre Windows, macOS e Linux
 ├── .coderabbit.yaml        Configuração da revisão automática (CodeRabbit)
+├── docs/
+│   └── roteiro-testes.md   Roteiro completo de testes manuais (Swagger e RabbitMQ)
 ├── src/
 │   ├── TK.Api/       API REST (controllers e DTOs)
 │   ├── TK.Worker/    Worker que consome a fila e ProcessadorTarefa (regras de processamento)
@@ -104,8 +106,11 @@ docker compose ps
 | Serviço | Endereço |
 |---|---|
 | API (Swagger) | http://localhost:5099/swagger |
+| Verificação da API | http://localhost:5099/health |
 | Painel do RabbitMQ | http://localhost:15672 (usuário `guest`, senha `guest`) |
 | MongoDB | `localhost:27017` |
+
+O endereço `/health` responde `{"status":"ok"}` quando a API está no ar.
 
 Para rodar **vários Workers** ao mesmo tempo:
 
@@ -217,6 +222,8 @@ O trabalho do Worker é simulado (5 segundos por tarefa). O campo `falharAte` do
 | `{"falharAte": 99}` | Falha em todas e termina em `Erro` após 3 tentativas |
 
 Para testar a **concorrência**, rode dois ou mais Workers (`--scale worker=2`), crie várias tarefas seguidas e acompanhe `docker compose logs -f worker`: cada tarefa é processada uma única vez, dividida entre os Workers.
+
+> 📋 **Roteiro completo de testes manuais:** Para validar todos os cenários passo a passo (validações de entrada, re-tentativas, concorrência entre Workers, queda de containers e resiliência), acesse o [**Roteiro de Testes (Swagger e Painel do RabbitMQ)**](docs/roteiro-testes.md).
 
 ## Testes
 
